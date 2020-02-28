@@ -1035,3 +1035,12 @@ class ScopeProviderTest(UnitTest):
         scope.get_qualified_names_for("doesnt_exist")
         self.assertEqual(len(scope._assignments), assignments_len_before)
         self.assertEqual(len(scope._accesses), accesses_len_before)
+
+    def test_keyword_arg_in_call(self) -> None:
+        m, scopes = get_scope_metadata_provider("call(arg=val)")
+        call = ensure_type(
+            ensure_type(m.body[0], cst.SimpleStatementLine).body[0], cst.Expr
+        ).value
+        scope = scopes[call]
+        self.assertIsInstance(scope, GlobalScope)
+        self.assertEqual(len(scope["arg"]), 0)  # no assignment should exist
