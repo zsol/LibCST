@@ -40,6 +40,7 @@ setuptools.setup(
             for dep in open("requirements-dev.txt").readlines()
             if "=" in dep
         ],
+        "native": ["libcst_native==0.1.0"],
     },
     classifiers=[
         "License :: OSI Approved :: MIT License",
