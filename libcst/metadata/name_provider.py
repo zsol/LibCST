@@ -76,3 +76,83 @@ class QualifiedNameVisitor(cst.CSTVisitor):
             self.provider.set_metadata(node, set())
         super().on_visit(node)
         return True
+
+
+DOT_PY: Pattern[str] = re.compile(r"(__init__)?\.py$")
+
+
+def _module_name(root_path: Path, path: str) -> Optional[str]:
+    try:
+        return (
+            DOT_PY.sub("", str(Path(path).relative_to(root_path)))
+            .replace("/", ".")
+            .rstrip(".")
+        )
+    except ValueError:
+        # relative_to failed, we can't guess the module name
+        return None
+
+
+class FullyQualifiedNameProvider(BatchableMetadataProvider[Collection[QualifiedName]]):
+    """
+    Provide fully qualified names for CST nodes. Like :class:`QualifiedNameProvider`,
+    but the provided :class:`QualifiedName`s have absolute identifier names instead of
+    local to the current module.
+
+    This provider is initialized with the current module's fully qualified name, and
+    can be used with :class:`~libcst.metadata.FullRepoManager`. Compared to :class:`QualifiedNameProvider`, it also resolves relative imports.
+    """
+
+    METADATA_DEPENDENCIES = (QualifiedNameProvider,)
+
+    @staticmethod
+    def gen_cache(
+        root_path: Path, paths: List[str], timeout: Optional[int]
+    ) -> Mapping[str, object]:
+        cache = {path: _module_name(root_path, path) for path in paths}
+        return cache
+
+    def __init__(self, cache: str) -> None:
+        super().__init__(cache)
+        self.module_name = cache
+
+    def visit_Module(self, node: cst.Module) -> bool:
+        visitor = FullyQualifiedNameVisitor(self, self.module_name)
+        node.visit(visitor)
+        self.set_metadata(
+            node,
+            {QualifiedName(name=self.module_name, source=QualifiedNameSource.LOCAL)},
+        )
+
+
+class FullyQualifiedNameVisitor(cst.CSTVisitor):
+    @staticmethod
+    def _fully_qualify(module_name: str, qname: QualifiedName) -> QualifiedName:
+        if qname.source == QualifiedNameSource.BUILTIN:
+            # builtins are already fully qualified
+            return qname
+        name = qname.name
+        if qname.source == QualifiedNameSource.IMPORT and not name.startswith("."):
+            # non-relative imports are already fully qualified
+            return qname
+        if name.startswith("."):
+            name = name.lstrip(".")
+            parts_to_strip = len(qname.name) - len(name)
+            module_name = ".".join(module_name.split(".")[: -1 * parts_to_strip])
+        return dataclasses.replace(qname, name=".".join([module_name, name]))
+
+    def __init__(self, provider: FullyQualifiedNameProvider, module_name: str) -> None:
+        self.module_name = module_name
+        self.provider = provider
+
+    def on_visit(self, node: cst.CSTNode) -> bool:
+        qnames = self.provider.get_metadata(QualifiedNameProvider, node)
+        if qnames is not None:
+            self.provider.set_metadata(
+                node,
+                {
+                    FullyQualifiedNameVisitor._fully_qualify(self.module_name, qname)
+                    for qname in qnames
+                },
+            )
+        return True
