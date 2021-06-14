@@ -5,13 +5,17 @@ use thiserror::Error;
 mod whitespace;
 pub use whitespace::{
     parse_empty_lines, parse_simple_whitespace, parse_trailing_whitespace, Comment, Config,
-    EmptyLine, Newline, SimpleWhitespace, TrailingWhitespace, WhitespaceError,
+    EmptyLine, Newline, ParenthesizableWhitespace, SimpleWhitespace, TrailingWhitespace,
+    WhitespaceError,
 };
 mod statement;
-pub use statement::{Decorator, FunctionDef, Statement};
+pub use statement::{
+    Decorator, Expr, FunctionDef, IndentedBlock, SimpleStatementSuite, SmallStatement, Statement,
+    Suite,
+};
 
 mod expression;
-pub use expression::{Name, Param, Parameters};
+pub use expression::{Expression, Name, Param, Parameters};
 
 mod op;
 pub use op::Semicolon;
@@ -65,6 +69,8 @@ pub fn parse_module<'a>(module_text: &'a str) -> Result<'a, Module> {
         input: module_text,
         lines: module_text.lines().collect(),
     };
+    // TODO: better error messages
+    // eprintln!("{:#?}", result);
     python::file(&result, &conf).or_else(|e| Err(ParserError::ParserError(e)))
 }
 
@@ -88,6 +94,12 @@ mod test {
             Ok(Module {
                 body: vec![Statement::FunctionDef(FunctionDef {
                     name: Name { value: "f" },
+                    body: Suite::SimpleStatementSuite(SimpleStatementSuite {
+                        body: vec![SmallStatement::Expr(Expr {
+                            value: Expression::Ellipsis(Default::default())
+                        })],
+                        ..Default::default()
+                    }),
                     params: Default::default(),
                     decorators: vec![],
                     whitespace_after_def: SimpleWhitespace(" "),
@@ -107,6 +119,12 @@ mod test {
             Ok(Module {
                 body: vec![Statement::FunctionDef(FunctionDef {
                     name: Name { value: "f" },
+                    body: Suite::SimpleStatementSuite(SimpleStatementSuite {
+                        body: vec![SmallStatement::Expr(Expr {
+                            value: Expression::Ellipsis(Default::default())
+                        })],
+                        ..Default::default()
+                    }),
                     params: Default::default(),
                     decorators: vec![Decorator {
                         decorator: Name { value: "hello" },
@@ -137,6 +155,12 @@ mod test {
             Ok(Module {
                 body: vec![Statement::FunctionDef(FunctionDef {
                     name: Name { value: "g" },
+                    body: Suite::SimpleStatementSuite(SimpleStatementSuite {
+                        body: vec![SmallStatement::Expr(Expr {
+                            value: Expression::Ellipsis(Default::default())
+                        })],
+                        ..Default::default()
+                    }),
                     params: Parameters {
                         params: vec![
                             Param {

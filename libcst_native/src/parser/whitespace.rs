@@ -5,6 +5,18 @@ use thiserror::Error;
 
 use super::{Codegen, CodegenState};
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum ParenthesizableWhitespace<'a> {
+    SimpleWhitespace(SimpleWhitespace<'a>),
+    ParenthesizedWhitespace(ParenthesizedWhitespace<'a>),
+}
+
+impl<'a> Default for ParenthesizableWhitespace<'a> {
+    fn default() -> Self {
+        ParenthesizableWhitespace::SimpleWhitespace(Default::default())
+    }
+}
+
 static SIMPLE_WHITESPACE_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\A([ \f\t]|\\(\r\n?|\n))*").expect("regex"));
 static NEWLINE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\A(\r\n?|\n)").expect("regex"));

@@ -1,5 +1,5 @@
 use super::{
-    Codegen, CodegenState, EmptyLine, Name, Parameters, Semicolon, SimpleWhitespace,
+    Codegen, CodegenState, EmptyLine, Expression, Name, Parameters, Semicolon, SimpleWhitespace,
     TrailingWhitespace,
 };
 
@@ -7,6 +7,67 @@ use super::{
 pub enum Statement<'a> {
     FunctionDef(FunctionDef<'a>),
     Pass,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum Suite<'a> {
+    IndentedBlock(IndentedBlock<'a>),
+    SimpleStatementSuite(SimpleStatementSuite<'a>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum SmallStatement<'a> {
+    Expr(Expr<'a>),
+    Pass(), // TODO: semicolon
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Expr<'a> {
+    pub value: Expression<'a>,
+    // TODO
+    // semicolon: Option<
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct IndentedBlock<'a> {
+    /// Sequence of statements belonging to this indented block.
+    pub body: Vec<Statement<'a>>,
+    /// Any optional trailing comment and the final ``NEWLINE`` at the end of the line.
+    pub header: TrailingWhitespace<'a>,
+    /// A string represents a specific indentation. A ``None`` value uses the modules's
+    /// default indentation. This is included because indentation is allowed to be
+    /// inconsistent across a file, just not ambiguously.
+    pub indent: Option<&'a str>,
+    /// Any trailing comments or lines after the dedent that are owned by this indented
+    /// block. Statements own preceeding and same-line trailing comments, but not
+    /// trailing lines, so it falls on :class:`IndentedBlock` to own it. In the case
+    /// that a statement follows an :class:`IndentedBlock`, that statement will own the
+    /// comments and lines that are at the same indent as the statement, and this
+    /// :class:`IndentedBlock` will own the comments and lines that are indented
+    /// further.
+    pub footer: Vec<EmptyLine<'a>>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct SimpleStatementSuite<'a> {
+    /// Sequence of small statements. All but the last statement are required to have
+    /// a semicolon.
+    pub body: Vec<SmallStatement<'a>>,
+
+    /// The whitespace between the colon in the parent statement and the body.
+    pub leading_whitespace: SimpleWhitespace<'a>,
+    /// Any optional trailing comment and the final ``NEWLINE`` at the end of the line.
+    pub trailing_whitespace: TrailingWhitespace<'a>,
+}
+
+impl<'a> Default for SimpleStatementSuite<'a> {
+    fn default() -> Self {
+        Self {
+            body: Default::default(),
+            leading_whitespace: SimpleWhitespace(" "),
+            trailing_whitespace: Default::default(),
+        }
+    }
 }
 
 impl<'a> Codegen for Statement<'a> {
@@ -19,15 +80,17 @@ impl<'a> Codegen for Statement<'a> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct SmallStatement<'a> {
-    pub semicolon: Option<Semicolon<'a>>,
-}
-
-#[derive(Debug, Eq, PartialEq)]
 pub struct FunctionDef<'a> {
+    /// The function name.
     pub name: Name<'a>,
-    pub decorators: Vec<Decorator<'a>>,
+    /// The function parameters. Present even if there are no params.
     pub params: Parameters<'a>,
+    /// The function body.
+    pub body: Suite<'a>,
+    /// Sequence of decorators applied to this function. Decorators are listed in
+    /// order that they appear in source (top to bottom) as apposed to the order
+    /// that they are applied to the function at runtime.
+    pub decorators: Vec<Decorator<'a>>,
 
     pub whitespace_after_def: SimpleWhitespace<'a>,
     pub whitespace_after_name: SimpleWhitespace<'a>,

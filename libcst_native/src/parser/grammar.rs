@@ -1,3 +1,5 @@
+use std::{borrow::Cow, iter};
+
 use super::*;
 
 macro_rules! lit {
@@ -70,13 +72,29 @@ peg::parser! {
             = s:statement()+ {s.into_iter().flatten().collect()}
         pub rule statement() -> Vec<Statement<'a>>
             = c:compound_stmt() {vec![c]}
-            / simple_stmt()
-        rule simple_stmt() -> Vec<Statement<'a>>
-            = small_stmt() **<1,> ";"
+            / simple_stmt() { todo!() }
+
+        rule simple_stmt() -> SimpleStatementSuite<'a>
+            // Can't use ** here because need to capture the whitespace for
+            // each separator
+            = init:(
+                s:small_stmt() [semi@lit!(";")] {?
+                    add_semi_to_small_stmt(config, s, Some(semi)).map_err(|e| "add_semi_to_small_stmt")
+                })*
+                // ugly semi syntax :(
+                last:(s:small_stmt() semi:([semi@Token{string: ";", ..}]{semi})? {?
+                    add_semi_to_small_stmt(config, s, semi).map_err(|e| "add_semi_to_small_stmt")
+                }) {? make_simple_stmt_suite(config, init, last).map_err(|e| "expected simple stmt suite") }
+
+        rule small_stmt() -> SmallStatement<'a>
+            = "pass" { SmallStatement::Pass() }
+            / e:star_expressions() { SmallStatement::Expr(Expr { value: e })}
+
+        rule star_expressions() -> Expression<'a>
+            = "..." { Expression::Ellipsis(Default::default()) }
+
         rule compound_stmt() -> Statement<'a>
             = &("def" / "@" / [Async]) f:function_def() { Statement::FunctionDef(f) }
-        rule small_stmt() -> Statement<'a>
-            = "pass" { Statement::Pass }
 
         rule function_def() -> FunctionDef<'a>
             = d:decorators() f:function_def_raw() {f.with_decorators(d)}
@@ -86,7 +104,13 @@ peg::parser! {
             = ([at@lit!("@")] [name@tok!(Name)] [tok!(Newline)] {? make_decorator(&config, at, name).map_err(|e| "expected decorator")} )+
 
         rule function_def_raw() -> FunctionDef<'a>
-            = [def@lit!("def")] [n@tok!(Name)] [op@lit!("(")] params:params()? [cp@lit!(")")] [c@lit!(":")] "..." {? make_function_def(&config, def, n, op, params, cp, c).map_err(|e| "ohno" )}
+            = [def@lit!("def")] [n@tok!(Name)]
+                [op@lit!("(")] params:params()? [cp@lit!(")")]
+                [c@lit!(":")]
+                b:block()
+                {?
+                    make_function_def(&config, def, n, op, params, cp, c, b).map_err(|e| "ohno" )
+                }
 
         rule params() -> Parameters<'a>
             = parameters()
@@ -106,6 +130,10 @@ peg::parser! {
 
         rule param() -> Param<'a>
             = [n@tok!(Name)] { Param {name: Name {value: n.string}, whitespace_after_param: SimpleWhitespace(""), whitespace_after_star: SimpleWhitespace("")}}
+
+        rule block() -> Suite<'a>
+            = [nl@tok!(Newline)] [i@tok!(Indent)] s:statements() [d@tok!(Dedent)] {? make_indented_block(config, nl, i, s, d).map_err(|e| "expected indented block") }
+            / s:simple_stmt() { Suite::SimpleStatementSuite(s) }
     }
 }
 
@@ -117,10 +145,12 @@ fn make_function_def<'a>(
     params: Option<Parameters<'a>>,
     close_paren: Token<'a>,
     mut colon: Token<'a>,
+    block: Suite<'a>,
 ) -> Result<'a, FunctionDef<'a>> {
     Ok(FunctionDef {
         name: Name { value: name.string },
         params: params.unwrap_or_default(),
+        body: block,
         decorators: Default::default(),
         whitespace_after_def: parse_simple_whitespace(config, &mut def.whitespace_after)?,
         whitespace_after_name: parse_simple_whitespace(config, &mut name.whitespace_after)?,
@@ -140,4 +170,51 @@ fn make_decorator<'a>(
         whitespace_after_at: parse_simple_whitespace(config, &mut at.whitespace_after)?,
         trailing_whitespace: Default::default(), //parse_trailing_whitespace(config, &mut newline.whitespace_before)?,
     })
+}
+
+fn make_indented_block<'a>(
+    config: &Config<'a>,
+    mut nl: Token<'a>,
+    mut indent: Token<'a>,
+    s: Vec<Statement<'a>>,
+    mut dedent: Token<'a>,
+) -> Result<'a, Suite<'a>> {
+    // We want to be able to only keep comments in the footer that are actually for
+    // this IndentedBlock. We do so by assuming that lines which are indented to the
+    // same level as the block itself are comments that go at the footer of the
+    // block. Comments that are indented to less than this indent are assumed to
+    // belong to the next line of code. We override the indent here because the
+    // dedent node's absolute indent is the resulting indentation after the dedent
+    // is performed. Its this way because the whitespace state for both the dedent's
+    // whitespace_after and the next BaseCompoundStatement's whitespace_before is
+    // shared. This allows us to partially parse here and parse the rest of the
+    // whitespace and comments on the next line, effectively making sure that
+    // comments are attached to the correct node.
+    // TODO: override indent
+    let footer = parse_empty_lines(config, &mut dedent.whitespace_after, None)?;
+    Ok(Suite::IndentedBlock(IndentedBlock {
+        body: s,
+        header: parse_trailing_whitespace(config, &mut nl.whitespace_after)?,
+        indent: indent.relative_indent,
+        footer,
+    }))
+}
+
+fn make_simple_stmt_suite<'a>(
+    config: &Config<'a>,
+    init: Vec<SmallStatement<'a>>,
+    last: SmallStatement<'a>,
+) -> Result<'a, SimpleStatementSuite<'a>> {
+    Ok(SimpleStatementSuite {
+        body: init.into_iter().chain(iter::once(last)).collect(),
+        ..Default::default()
+    })
+}
+
+fn add_semi_to_small_stmt<'a>(
+    config: &Config<'a>,
+    stmt: SmallStatement<'a>,
+    semi: Option<Token<'a>>,
+) -> Result<'a, SmallStatement<'a>> {
+    Ok(stmt) // TODO
 }
