@@ -230,18 +230,15 @@ jobs:
           command: fmt
           args: --all --manifest-path=native/Cargo.toml -- --check
   native-bench:
-    name: Run Rust benchmark
+    name: Benchmark Rust code
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Run benchmark
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - name: Run benchmark
-        uses: actions-rs/cargo@v1
-        with:
-          command: bench
-          args: --manifest-path=native/Cargo.toml | tee bench-output.txt
+        run: cargo bench --manifest-path=native/Cargo.toml | tee bench-output.txt
       - name: Store benchmark result
         uses: rhysd/github-action-benchmark@v1
         with:
