@@ -1,11 +1,8 @@
 [tool.black]
 target-version = ["py36"]
+exclude = "native/.*"
 
 [tool.isort]
-line_length = 88
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-lines_after_imports = 2
+profile = "black"
 combine_as_imports = true
 skip_glob = "native/*"
