@@ -60,6 +60,7 @@ mod string_types;
 
 use once_cell::sync::Lazy;
 use regex::Regex;
+
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::fmt::Debug;
@@ -68,7 +69,7 @@ use std::fmt::Formatter;
 use crate::core::string_types::{FStringNode, StringQuoteChar, StringQuoteSize};
 use crate::operators::OPERATOR_RE;
 use crate::text_position::{TextPosition, TextPositionSnapshot};
-use crate::whitespace_parser::State as WhitespaceState;
+use crate::whitespace_parser::{SharedState as WhitespaceState, State};
 
 /// The maximum number of indentation levels at any given point in time. CPython's tokenizer.c caps
 /// this to avoid the complexity of allocating a dynamic array, but we're using a Vec, so it's not
@@ -1078,7 +1079,7 @@ impl<'a> Iterator for TokenIterator<'a> {
                     self.absolute_indents.push(absolute_indent);
                     // HACKY: mutate and fixup the previous whitespace state
                     if let Some(ws) = self.previous_whitespace.as_mut() {
-                        ws.absolute_indent = absolute_indent;
+                        ws.borrow_mut().absolute_indent = absolute_indent;
                     }
                     Some(relative_indent)
                 }
@@ -1086,7 +1087,8 @@ impl<'a> Iterator for TokenIterator<'a> {
                     self.absolute_indents.pop();
                     // HACKY: mutate and fixup the previous whitespace state
                     if let Some(ws) = self.previous_whitespace.as_mut() {
-                        ws.absolute_indent = self.absolute_indents.last().unwrap_or(&"");
+                        ws.borrow_mut().absolute_indent =
+                            self.absolute_indents.last().unwrap_or(&"");
                     }
                     None
                 }
@@ -1096,14 +1098,14 @@ impl<'a> Iterator for TokenIterator<'a> {
             let whitespace_before = self.previous_whitespace.clone().unwrap_or_default();
             let whitespace_after = match tok_type {
                 TokType::Indent | TokType::Dedent | TokType::EndMarker => whitespace_before.clone(),
-                _ => WhitespaceState {
+                _ => WhitespaceState::from(State {
                     line: text_pos.line_number(),
                     column: text_pos.char_column_number(),
                     column_byte: text_pos.byte_column_number(),
                     byte_offset: text_pos.byte_idx(),
                     absolute_indent: self.absolute_indents.last().unwrap_or(&""),
                     is_parenthesized: self.core_state.is_parenthesized(),
-                },
+                }),
             };
             self.previous_whitespace = Some(whitespace_after.clone());
 

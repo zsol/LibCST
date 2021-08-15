@@ -1293,22 +1293,23 @@ parser! {
 fn make_function_def<'a>(
     config: &Config<'a>,
     asy: Option<Token<'a>>,
-    mut def: Token<'a>,
+    def: Token<'a>,
     name: Name<'a>,
-    mut open_paren: Token<'a>,
+    open_paren: Token<'a>,
     mut params: Option<Parameters<'a>>,
     close_paren: Token<'a>,
     returns: Option<Annotation<'a>>,
-    mut colon: Token<'a>,
+    colon: Token<'a>,
     body: Suite<'a>,
 ) -> Result<'a, FunctionDef<'a>> {
-    let (asynchronous, leading_lines) = if let Some(mut asy) = asy {
-        let whitespace_after = parse_parenthesizable_whitespace(config, &mut asy.whitespace_after)?;
+    let (asynchronous, leading_lines) = if let Some(asy) = asy {
+        let whitespace_after =
+            parse_parenthesizable_whitespace(config, &mut asy.whitespace_after.borrow_mut())?;
         (
             Some(Asynchronous { whitespace_after }),
             Some(parse_empty_lines_from_end(
                 config,
-                &mut asy.whitespace_before,
+                &mut asy.whitespace_before.borrow_mut(),
             )?),
         )
     } else {
@@ -1318,7 +1319,7 @@ fn make_function_def<'a>(
     let leading_lines = if let Some(ll) = leading_lines {
         ll
     } else {
-        parse_empty_lines_from_end(config, &mut def.whitespace_before)?
+        parse_empty_lines_from_end(config, &mut def.whitespace_before.borrow_mut())?
     };
 
     if let Some(parameters) = params.as_mut() {
@@ -1334,27 +1335,42 @@ fn make_function_def<'a>(
         asynchronous,
         leading_lines,
         lines_after_decorators: vec![],
-        whitespace_after_def: parse_simple_whitespace(config, &mut def.whitespace_after)?,
-        whitespace_after_name: parse_simple_whitespace(config, &mut open_paren.whitespace_before)?,
-        whitespace_before_colon: parse_simple_whitespace(config, &mut colon.whitespace_before)?,
+        whitespace_after_def: parse_simple_whitespace(
+            config,
+            &mut def.whitespace_after.borrow_mut(),
+        )?,
+        whitespace_after_name: parse_simple_whitespace(
+            config,
+            &mut open_paren.whitespace_before.borrow_mut(),
+        )?,
+        whitespace_before_colon: parse_simple_whitespace(
+            config,
+            &mut colon.whitespace_before.borrow_mut(),
+        )?,
         whitespace_before_params: parse_parenthesizable_whitespace(
             config,
-            &mut open_paren.whitespace_after,
+            &mut open_paren.whitespace_after.borrow_mut(),
         )?,
     })
 }
 
 fn make_decorator<'a>(
     config: &Config<'a>,
-    mut at: Token<'a>,
+    at: Token<'a>,
     name: Expression<'a>,
-    mut newline: Token<'a>,
+    newline: Token<'a>,
 ) -> Result<'a, Decorator<'a>> {
     Ok(Decorator {
         decorator: name,
-        leading_lines: parse_empty_lines(config, &mut at.whitespace_before, None)?,
-        whitespace_after_at: parse_simple_whitespace(config, &mut at.whitespace_after)?,
-        trailing_whitespace: parse_trailing_whitespace(config, &mut newline.whitespace_before)?,
+        leading_lines: parse_empty_lines(config, &mut at.whitespace_before.borrow_mut(), None)?,
+        whitespace_after_at: parse_simple_whitespace(
+            config,
+            &mut at.whitespace_after.borrow_mut(),
+        )?,
+        trailing_whitespace: parse_trailing_whitespace(
+            config,
+            &mut newline.whitespace_before.borrow_mut(),
+        )?,
     })
 }
 
@@ -1377,9 +1393,11 @@ fn make_comparison<'a>(
     }
 }
 
-fn make_comparison_operator<'a>(config: &Config<'a>, mut tok: Token<'a>) -> Result<'a, CompOp<'a>> {
-    let whitespace_before = parse_parenthesizable_whitespace(config, &mut tok.whitespace_before)?;
-    let whitespace_after = parse_parenthesizable_whitespace(config, &mut tok.whitespace_after)?;
+fn make_comparison_operator<'a>(config: &Config<'a>, tok: Token<'a>) -> Result<'a, CompOp<'a>> {
+    let whitespace_before =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before.borrow_mut())?;
+    let whitespace_after =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_after.borrow_mut())?;
 
     match tok.string {
         "<" => Ok(CompOp::LessThan {
@@ -1420,12 +1438,15 @@ fn make_comparison_operator<'a>(config: &Config<'a>, mut tok: Token<'a>) -> Resu
 
 fn make_comparison_operator_2<'a>(
     config: &Config<'a>,
-    mut first: Token<'a>,
-    mut second: Token<'a>,
+    first: Token<'a>,
+    second: Token<'a>,
 ) -> Result<'a, CompOp<'a>> {
-    let whitespace_before = parse_parenthesizable_whitespace(config, &mut first.whitespace_before)?;
-    let whitespace_between = parse_parenthesizable_whitespace(config, &mut first.whitespace_after)?;
-    let whitespace_after = parse_parenthesizable_whitespace(config, &mut second.whitespace_after)?;
+    let whitespace_before =
+        parse_parenthesizable_whitespace(config, &mut first.whitespace_before.borrow_mut())?;
+    let whitespace_between =
+        parse_parenthesizable_whitespace(config, &mut first.whitespace_after.borrow_mut())?;
+    let whitespace_after =
+        parse_parenthesizable_whitespace(config, &mut second.whitespace_after.borrow_mut())?;
 
     match (first.string, second.string) {
         ("is", "not") => Ok(CompOp::IsNot {
@@ -1464,9 +1485,11 @@ fn make_boolean_op<'a>(
     Ok(expr)
 }
 
-fn make_boolean_operator<'a>(config: &Config<'a>, mut tok: Token<'a>) -> Result<'a, BooleanOp<'a>> {
-    let whitespace_before = parse_parenthesizable_whitespace(config, &mut tok.whitespace_before)?;
-    let whitespace_after = parse_parenthesizable_whitespace(config, &mut tok.whitespace_after)?;
+fn make_boolean_operator<'a>(config: &Config<'a>, tok: Token<'a>) -> Result<'a, BooleanOp<'a>> {
+    let whitespace_before =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before.borrow_mut())?;
+    let whitespace_after =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_after.borrow_mut())?;
     match tok.string {
         "and" => Ok(BooleanOp::And {
             whitespace_after,
@@ -1496,9 +1519,11 @@ fn make_binary_op<'a>(
     })
 }
 
-fn make_binary_operator<'a>(config: &Config<'a>, mut tok: Token<'a>) -> Result<'a, BinaryOp<'a>> {
-    let whitespace_before = parse_parenthesizable_whitespace(config, &mut tok.whitespace_before)?;
-    let whitespace_after = parse_parenthesizable_whitespace(config, &mut tok.whitespace_after)?;
+fn make_binary_operator<'a>(config: &Config<'a>, tok: Token<'a>) -> Result<'a, BinaryOp<'a>> {
+    let whitespace_before =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before.borrow_mut())?;
+    let whitespace_after =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_after.borrow_mut())?;
 
     match tok.string {
         "+" => Ok(BinaryOp::Add {
@@ -1571,8 +1596,9 @@ fn make_unary_op<'a>(
     })
 }
 
-fn make_unary_operator<'a>(config: &Config<'a>, mut tok: Token<'a>) -> Result<'a, UnaryOp<'a>> {
-    let whitespace_after = parse_parenthesizable_whitespace(config, &mut tok.whitespace_after)?;
+fn make_unary_operator<'a>(config: &Config<'a>, tok: Token<'a>) -> Result<'a, UnaryOp<'a>> {
+    let whitespace_after =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_after.borrow_mut())?;
     match tok.string {
         "+" => Ok(UnaryOp::Plus(whitespace_after)),
         "-" => Ok(UnaryOp::Minus(whitespace_after)),
@@ -1592,10 +1618,10 @@ fn make_number<'a>(_config: &Config<'a>, num: Token<'a>) -> Result<'a, Expressio
 
 fn make_indented_block<'a>(
     config: &Config<'a>,
-    mut nl: Token<'a>,
+    nl: Token<'a>,
     indent: Token<'a>,
     statements: Vec<Statement<'a>>,
-    mut dedent: Token<'a>,
+    dedent: Token<'a>,
 ) -> Result<'a, Suite<'a>> {
     // We want to be able to only keep comments in the footer that are actually for
     // this IndentedBlock. We do so by assuming that lines which are indented to the
@@ -1610,10 +1636,10 @@ fn make_indented_block<'a>(
     // comments are attached to the correct node.
     let footer = parse_empty_lines(
         config,
-        &mut dedent.whitespace_after,
-        Some(indent.whitespace_before.absolute_indent),
+        &mut dedent.whitespace_after.borrow_mut(),
+        Some(indent.whitespace_before.borrow().absolute_indent),
     )?;
-    let header = parse_trailing_whitespace(config, &mut nl.whitespace_before)?;
+    let header = parse_trailing_whitespace(config, &mut nl.whitespace_before.borrow_mut())?;
     Ok(Suite::IndentedBlock(IndentedBlock {
         body: statements,
         header,
@@ -1633,7 +1659,7 @@ struct SimpleStatementParts<'a> {
 
 fn _make_simple_statement<'a>(
     config: &Config<'a>,
-    mut parts: SimpleStatementParts<'a>,
+    parts: SimpleStatementParts<'a>,
 ) -> Result<'a, (Token<'a>, Vec<SmallStatement<'a>>, TrailingWhitespace<'a>)> {
     let mut body = vec![];
     for (statement, _semi) in parts.statements {
@@ -1646,7 +1672,8 @@ fn _make_simple_statement<'a>(
     body.push(parts.last_statement);
 
     // TODO: is this correct?
-    let trailing_whitespace = parse_trailing_whitespace(config, &mut parts.nl.whitespace_before)?;
+    let trailing_whitespace =
+        parse_trailing_whitespace(config, &mut parts.nl.whitespace_before.borrow_mut())?;
 
     Ok((parts.first, body, trailing_whitespace))
 }
@@ -1655,8 +1682,9 @@ fn make_simple_statement_suite<'a>(
     config: &Config<'a>,
     parts: SimpleStatementParts<'a>,
 ) -> Result<'a, Suite<'a>> {
-    let (mut first, body, trailing_whitespace) = _make_simple_statement(config, parts)?;
-    let leading_whitespace = parse_simple_whitespace(config, &mut first.whitespace_before)?;
+    let (first, body, trailing_whitespace) = _make_simple_statement(config, parts)?;
+    let leading_whitespace =
+        parse_simple_whitespace(config, &mut first.whitespace_before.borrow_mut())?;
     Ok(Suite::SimpleStatementSuite(SimpleStatementSuite {
         body,
         leading_whitespace,
@@ -1668,8 +1696,9 @@ fn make_simple_statement_line<'a>(
     config: &Config<'a>,
     parts: SimpleStatementParts<'a>,
 ) -> Result<'a, SimpleStatementLine<'a>> {
-    let (mut first, body, trailing_whitespace) = _make_simple_statement(config, parts)?;
-    let leading_lines = parse_empty_lines_from_end(config, &mut first.whitespace_before)?;
+    let (first, body, trailing_whitespace) = _make_simple_statement(config, parts)?;
+    let leading_lines =
+        parse_empty_lines_from_end(config, &mut first.whitespace_before.borrow_mut())?;
     Ok(SimpleStatementLine {
         body,
         leading_lines,
@@ -1679,16 +1708,19 @@ fn make_simple_statement_line<'a>(
 
 fn make_if<'a>(
     config: &Config<'a>,
-    mut keyword: Token<'a>,
+    keyword: Token<'a>,
     cond: Expression<'a>,
-    mut colon: Token<'a>,
+    colon: Token<'a>,
     block: Suite<'a>,
     orelse: Option<OrElse<'a>>,
     is_elif: bool,
 ) -> Result<'a, If<'a>> {
-    let leading_lines = parse_empty_lines_from_end(config, &mut keyword.whitespace_before)?;
-    let whitespace_before_test = parse_simple_whitespace(config, &mut keyword.whitespace_after)?;
-    let whitespace_after_test = parse_simple_whitespace(config, &mut colon.whitespace_before)?;
+    let leading_lines =
+        parse_empty_lines_from_end(config, &mut keyword.whitespace_before.borrow_mut())?;
+    let whitespace_before_test =
+        parse_simple_whitespace(config, &mut keyword.whitespace_after.borrow_mut())?;
+    let whitespace_after_test =
+        parse_simple_whitespace(config, &mut colon.whitespace_before.borrow_mut())?;
     Ok(If {
         leading_lines,
         whitespace_before_test,
@@ -1702,12 +1734,14 @@ fn make_if<'a>(
 
 fn make_else<'a>(
     config: &Config<'a>,
-    mut keyword: Token<'a>,
-    mut colon: Token<'a>,
+    keyword: Token<'a>,
+    colon: Token<'a>,
     block: Suite<'a>,
 ) -> Result<'a, Else<'a>> {
-    let leading_lines = parse_empty_lines_from_end(config, &mut keyword.whitespace_before)?;
-    let whitespace_before_colon = parse_simple_whitespace(config, &mut colon.whitespace_before)?;
+    let leading_lines =
+        parse_empty_lines_from_end(config, &mut keyword.whitespace_before.borrow_mut())?;
+    let whitespace_before_colon =
+        parse_simple_whitespace(config, &mut colon.whitespace_before.borrow_mut())?;
     Ok(Else {
         leading_lines,
         whitespace_before_colon,
@@ -1720,11 +1754,11 @@ struct StarEtc<'a>(Option<StarArg<'a>>, Vec<Param<'a>>, Option<Param<'a>>);
 fn adjust_parameters_trailing_whitespace<'a>(
     config: &Config<'a>,
     parameters: &mut Parameters<'a>,
-    mut next_tok: Token<'a>,
+    next_tok: Token<'a>,
 ) -> Result<'a, Token<'a>> {
-    let mut do_adjust = |param: &mut Param<'a>| -> Result<'a, ()> {
+    let do_adjust = |param: &mut Param<'a>| -> Result<'a, ()> {
         let whitespace_after =
-            parse_parenthesizable_whitespace(config, &mut next_tok.whitespace_before)?;
+            parse_parenthesizable_whitespace(config, &mut next_tok.whitespace_before.borrow_mut())?;
         if param.comma.is_none() {
             param.whitespace_after_param = whitespace_after;
         }
@@ -1793,10 +1827,10 @@ fn add_param_default<'a>(
 fn add_param_star<'a>(
     config: &Config<'a>,
     param: Param<'a>,
-    mut star: Token<'a>,
+    star: Token<'a>,
 ) -> Result<'a, Param<'a>> {
     let whitespace_after_star =
-        parse_parenthesizable_whitespace(config, &mut star.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut star.whitespace_after.borrow_mut())?;
     Ok(Param {
         star: Some(star.string),
         whitespace_after_star,
@@ -1804,18 +1838,22 @@ fn add_param_star<'a>(
     })
 }
 
-fn make_assign_equal<'a>(config: &Config<'a>, mut eq: Token<'a>) -> Result<'a, AssignEqual<'a>> {
-    let whitespace_before = parse_parenthesizable_whitespace(config, &mut eq.whitespace_before)?;
-    let whitespace_after = parse_parenthesizable_whitespace(config, &mut eq.whitespace_after)?;
+fn make_assign_equal<'a>(config: &Config<'a>, eq: Token<'a>) -> Result<'a, AssignEqual<'a>> {
+    let whitespace_before =
+        parse_parenthesizable_whitespace(config, &mut eq.whitespace_before.borrow_mut())?;
+    let whitespace_after =
+        parse_parenthesizable_whitespace(config, &mut eq.whitespace_after.borrow_mut())?;
     Ok(AssignEqual {
         whitespace_before,
         whitespace_after,
     })
 }
 
-fn make_comma<'a>(config: &Config<'a>, mut tok: Token<'a>) -> Result<'a, Comma<'a>> {
-    let whitespace_before = parse_parenthesizable_whitespace(config, &mut tok.whitespace_before)?;
-    let whitespace_after = parse_parenthesizable_whitespace(config, &mut tok.whitespace_after)?;
+fn make_comma<'a>(config: &Config<'a>, tok: Token<'a>) -> Result<'a, Comma<'a>> {
+    let whitespace_before =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before.borrow_mut())?;
+    let whitespace_after =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_after.borrow_mut())?;
     Ok(Comma {
         whitespace_before,
         whitespace_after,
@@ -1852,9 +1890,11 @@ fn make_name(tok: Token) -> Name {
     }
 }
 
-fn make_dot<'a>(config: &Config<'a>, mut tok: Token<'a>) -> Result<'a, Dot<'a>> {
-    let whitespace_before = parse_parenthesizable_whitespace(config, &mut tok.whitespace_before)?;
-    let whitespace_after = parse_parenthesizable_whitespace(config, &mut tok.whitespace_after)?;
+fn make_dot<'a>(config: &Config<'a>, tok: Token<'a>) -> Result<'a, Dot<'a>> {
+    let whitespace_before =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before.borrow_mut())?;
+    let whitespace_after =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_after.borrow_mut())?;
     Ok(Dot {
         whitespace_before,
         whitespace_after,
@@ -1870,11 +1910,15 @@ fn make_import_alias<'a>(
         name,
         asname: match asname {
             None => None,
-            Some((mut kw, n)) => {
-                let whitespace_before_as =
-                    parse_parenthesizable_whitespace(config, &mut kw.whitespace_before)?;
-                let whitespace_after_as =
-                    parse_parenthesizable_whitespace(config, &mut kw.whitespace_after)?;
+            Some((kw, n)) => {
+                let whitespace_before_as = parse_parenthesizable_whitespace(
+                    config,
+                    &mut kw.whitespace_before.borrow_mut(),
+                )?;
+                let whitespace_after_as = parse_parenthesizable_whitespace(
+                    config,
+                    &mut kw.whitespace_after.borrow_mut(),
+                )?;
                 Some(AsName {
                     name: AssignTargetExpression::Name(n),
                     whitespace_after_as,
@@ -1890,14 +1934,16 @@ type ParenthesizedImportNames<'a> = (Option<Token<'a>>, ImportNames<'a>, Option<
 
 fn make_import_from<'a>(
     config: &Config<'a>,
-    mut from: Token<'a>,
+    from: Token<'a>,
     dots: Vec<Token<'a>>,
     module: Option<NameOrAttribute<'a>>,
-    mut import: Token<'a>,
+    import: Token<'a>,
     aliases: ParenthesizedImportNames<'a>,
 ) -> Result<'a, ImportFrom<'a>> {
-    let whitespace_after_from = parse_simple_whitespace(config, &mut from.whitespace_after)?;
-    let whitespace_after_import = parse_simple_whitespace(config, &mut import.whitespace_after)?;
+    let whitespace_after_from =
+        parse_simple_whitespace(config, &mut from.whitespace_after.borrow_mut())?;
+    let whitespace_after_import =
+        parse_simple_whitespace(config, &mut import.whitespace_after.borrow_mut())?;
     let (lpar_tok, names, rpar_tok) = aliases;
 
     let lpar = match lpar_tok {
@@ -1921,11 +1967,11 @@ fn make_import_from<'a>(
     };
 
     let mut relative = vec![];
-    for mut dot_tok in dots {
+    for dot_tok in dots {
         let dot = Dot {
             whitespace_after: ParenthesizableWhitespace::SimpleWhitespace(parse_simple_whitespace(
                 config,
-                &mut dot_tok.whitespace_after,
+                &mut dot_tok.whitespace_after.borrow_mut(),
             )?),
             whitespace_before: ParenthesizableWhitespace::SimpleWhitespace(SimpleWhitespace("")),
         };
@@ -1943,7 +1989,8 @@ fn make_import_from<'a>(
             swap(dot_ws, &mut whitespace_before_import);
         }
     } else {
-        whitespace_before_import = parse_simple_whitespace(config, &mut import.whitespace_before)?;
+        whitespace_before_import =
+            parse_simple_whitespace(config, &mut import.whitespace_before.borrow_mut())?;
     }
 
     Ok(ImportFrom {
@@ -1961,10 +2008,11 @@ fn make_import_from<'a>(
 
 fn make_import<'a>(
     config: &Config<'a>,
-    mut import: Token<'a>,
+    import: Token<'a>,
     names: Vec<ImportAlias<'a>>,
 ) -> Result<'a, Import<'a>> {
-    let whitespace_after_import = parse_simple_whitespace(config, &mut import.whitespace_after)?;
+    let whitespace_after_import =
+        parse_simple_whitespace(config, &mut import.whitespace_after.borrow_mut())?;
     Ok(Import {
         names,
         whitespace_after_import,
@@ -1986,22 +2034,24 @@ fn make_import_from_as_names<'a>(
     ret
 }
 
-fn make_lpar<'a>(config: &Config<'a>, mut tok: Token<'a>) -> Result<'a, LeftParen<'a>> {
-    let whitespace_after = parse_parenthesizable_whitespace(config, &mut tok.whitespace_after)?;
+fn make_lpar<'a>(config: &Config<'a>, tok: Token<'a>) -> Result<'a, LeftParen<'a>> {
+    let whitespace_after =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_after.borrow_mut())?;
     Ok(LeftParen { whitespace_after })
 }
 
-fn make_rpar<'a>(config: &Config<'a>, mut tok: Token<'a>) -> Result<'a, RightParen<'a>> {
-    let whitespace_before = parse_parenthesizable_whitespace(config, &mut tok.whitespace_before)?;
+fn make_rpar<'a>(config: &Config<'a>, tok: Token<'a>) -> Result<'a, RightParen<'a>> {
+    let whitespace_before =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before.borrow_mut())?;
     Ok(RightParen { whitespace_before })
 }
 
 fn make_module<'a>(
     config: &Config<'a>,
     mut body: Vec<Statement<'a>>,
-    mut tok: Token<'a>,
+    tok: Token<'a>,
 ) -> Result<'a, Module<'a>> {
-    let mut footer = parse_empty_lines(config, &mut tok.whitespace_before, Some(""))?;
+    let mut footer = parse_empty_lines(config, &mut tok.whitespace_before.borrow_mut(), Some(""))?;
     let mut header = vec![];
     if let Some(stmt) = body.first_mut() {
         swap(&mut stmt.leading_lines(), &mut &header);
@@ -2051,7 +2101,7 @@ fn make_attribute<'a>(
 
 fn make_starred_element<'a>(
     config: &Config<'a>,
-    mut star: Token<'a>,
+    star: Token<'a>,
     rest: Element<'a>,
 ) -> Result<'a, StarredElement<'a>> {
     let value = match rest {
@@ -2059,7 +2109,7 @@ fn make_starred_element<'a>(
         _ => panic!("Internal error while making starred element"),
     };
     let whitespace_before_value =
-        parse_parenthesizable_whitespace(config, &mut star.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut star.whitespace_after.borrow_mut())?;
     Ok(StarredElement {
         value: Box::new(value),
         whitespace_before_value,
@@ -2101,10 +2151,11 @@ fn make_assignment<'a>(
     rhs: Expression<'a>,
 ) -> Result<'a, Assign<'a>> {
     let mut targets = vec![];
-    for (target, mut equal) in lhs {
+    for (target, equal) in lhs {
         let whitespace_before_equal =
-            parse_simple_whitespace(config, &mut equal.whitespace_before)?;
-        let whitespace_after_equal = parse_simple_whitespace(config, &mut equal.whitespace_after)?;
+            parse_simple_whitespace(config, &mut equal.whitespace_before.borrow_mut())?;
+        let whitespace_after_equal =
+            parse_simple_whitespace(config, &mut equal.whitespace_after.borrow_mut())?;
         targets.push(AssignTarget {
             target,
             whitespace_before_equal,
@@ -2182,11 +2233,11 @@ fn make_kwarg<'a>(
 
 fn make_star_arg<'a>(
     config: &Config<'a>,
-    mut star: Token<'a>,
+    star: Token<'a>,
     expr: Expression<'a>,
 ) -> Result<'a, Arg<'a>> {
     let whitespace_after_star =
-        parse_parenthesizable_whitespace(config, &mut star.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut star.whitespace_after.borrow_mut())?;
     Ok(Arg {
         value: expr,
         keyword: None,
@@ -2201,18 +2252,18 @@ fn make_star_arg<'a>(
 fn make_call<'a>(
     config: &Config<'a>,
     func: Expression<'a>,
-    mut lpar: Token<'a>,
+    lpar: Token<'a>,
     mut args: Vec<Arg<'a>>,
-    mut rpar: Token<'a>,
+    rpar: Token<'a>,
 ) -> Result<'a, Call<'a>> {
     let whitespace_after_func =
-        parse_parenthesizable_whitespace(config, &mut lpar.whitespace_before)?;
+        parse_parenthesizable_whitespace(config, &mut lpar.whitespace_before.borrow_mut())?;
     let whitespace_before_args =
-        parse_parenthesizable_whitespace(config, &mut lpar.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut lpar.whitespace_after.borrow_mut())?;
     if let Some(arg) = args.last_mut() {
         if arg.comma.is_none() {
             arg.whitespace_after_arg =
-                parse_parenthesizable_whitespace(config, &mut rpar.whitespace_before)?;
+                parse_parenthesizable_whitespace(config, &mut rpar.whitespace_before.borrow_mut())?;
         }
     }
 
@@ -2233,7 +2284,7 @@ fn make_call<'a>(
 fn make_genexp_call<'a>(
     config: &Config<'a>,
     func: Expression<'a>,
-    mut lpar_tok: Token<'a>,
+    lpar_tok: Token<'a>,
     mut genexp: GeneratorExp<'a>,
 ) -> Call<'a> {
     // func ( (genexp) )
@@ -2253,7 +2304,7 @@ fn make_genexp_call<'a>(
 
     let whitespace_before_args = first_lpar.whitespace_after;
     let whitespace_after_func =
-        parse_parenthesizable_whitespace(config, &mut lpar_tok.whitespace_before)
+        parse_parenthesizable_whitespace(config, &mut lpar_tok.whitespace_before.borrow_mut())
             .expect("This whitespace was parsed once already, it should never fail");
 
     Call {
@@ -2290,12 +2341,13 @@ fn make_arg(expr: Expression) -> Arg {
 
 fn make_comp_if<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     test: Expression<'a>,
 ) -> Result<'a, CompIf<'a>> {
-    let whitespace_before = parse_parenthesizable_whitespace(config, &mut kw.whitespace_before)?;
+    let whitespace_before =
+        parse_parenthesizable_whitespace(config, &mut kw.whitespace_before.borrow_mut())?;
     let whitespace_before_test =
-        parse_parenthesizable_whitespace(config, &mut kw.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut kw.whitespace_after.borrow_mut())?;
     Ok(CompIf {
         test,
         whitespace_before,
@@ -2306,19 +2358,20 @@ fn make_comp_if<'a>(
 fn make_for_if<'a>(
     config: &Config<'a>,
     mut async_tok: Option<Token<'a>>,
-    mut for_: Token<'a>,
+    for_: Token<'a>,
     target: AssignTargetExpression<'a>,
-    mut in_: Token<'a>,
+    in_: Token<'a>,
     iter: Expression<'a>,
     ifs: Vec<CompIf<'a>>,
 ) -> Result<'a, CompFor<'a>> {
     let mut whitespace_before =
-        parse_parenthesizable_whitespace(config, &mut for_.whitespace_before)?;
+        parse_parenthesizable_whitespace(config, &mut for_.whitespace_before.borrow_mut())?;
     let whitespace_after_for =
-        parse_parenthesizable_whitespace(config, &mut for_.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut for_.whitespace_after.borrow_mut())?;
     let whitespace_before_in =
-        parse_parenthesizable_whitespace(config, &mut in_.whitespace_before)?;
-    let whitespace_after_in = parse_parenthesizable_whitespace(config, &mut in_.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut in_.whitespace_before.borrow_mut())?;
+    let whitespace_after_in =
+        parse_parenthesizable_whitespace(config, &mut in_.whitespace_after.borrow_mut())?;
     let inner_for_in = None;
 
     // If there is an async keyword, the start of the CompFor expression is considered
@@ -2326,7 +2379,8 @@ fn make_for_if<'a>(
     // own the whitespace before the for token.
     let asynchronous = if let Some(asy) = async_tok.as_mut() {
         let whitespace_after = whitespace_before;
-        whitespace_before = parse_parenthesizable_whitespace(config, &mut asy.whitespace_before)?;
+        whitespace_before =
+            parse_parenthesizable_whitespace(config, &mut asy.whitespace_before.borrow_mut())?;
         Some(Asynchronous { whitespace_after })
     } else {
         None
@@ -2375,23 +2429,23 @@ fn merge_comp_fors(comp_fors: Vec<CompFor>) -> CompFor {
 
 fn make_list_comp<'a>(
     config: &Config<'a>,
-    mut lbrak: Token<'a>,
+    lbrak: Token<'a>,
     elt: Expression<'a>,
     for_in: CompFor<'a>,
-    mut rbrak: Token<'a>,
+    rbrak: Token<'a>,
 ) -> Result<'a, ListComp<'a>> {
     let lbracket =
-        parse_parenthesizable_whitespace(config, &mut lbrak.whitespace_after).map(|ws| {
-            LeftSquareBracket {
+        parse_parenthesizable_whitespace(config, &mut lbrak.whitespace_after.borrow_mut()).map(
+            |ws| LeftSquareBracket {
                 whitespace_after: ws,
-            }
-        })?;
+            },
+        )?;
     let rbracket =
-        parse_parenthesizable_whitespace(config, &mut rbrak.whitespace_before).map(|ws| {
-            RightSquareBracket {
+        parse_parenthesizable_whitespace(config, &mut rbrak.whitespace_before.borrow_mut()).map(
+            |ws| RightSquareBracket {
                 whitespace_before: ws,
-            }
-        })?;
+            },
+        )?;
 
     Ok(ListComp {
         elt: Box::new(elt),
@@ -2405,23 +2459,23 @@ fn make_list_comp<'a>(
 
 fn make_set_comp<'a>(
     config: &Config<'a>,
-    mut lbrace: Token<'a>,
+    lbrace: Token<'a>,
     elt: Expression<'a>,
     for_in: CompFor<'a>,
-    mut rbrace: Token<'a>,
+    rbrace: Token<'a>,
 ) -> Result<'a, SetComp<'a>> {
     let lbrace =
-        parse_parenthesizable_whitespace(config, &mut lbrace.whitespace_after).map(|ws| {
-            LeftCurlyBrace {
+        parse_parenthesizable_whitespace(config, &mut lbrace.whitespace_after.borrow_mut()).map(
+            |ws| LeftCurlyBrace {
                 whitespace_after: ws,
-            }
-        })?;
+            },
+        )?;
     let rbrace =
-        parse_parenthesizable_whitespace(config, &mut rbrace.whitespace_before).map(|ws| {
-            RightCurlyBrace {
+        parse_parenthesizable_whitespace(config, &mut rbrace.whitespace_before.borrow_mut()).map(
+            |ws| RightCurlyBrace {
                 whitespace_before: ws,
-            }
-        })?;
+            },
+        )?;
 
     Ok(SetComp {
         elt: Box::new(elt),
@@ -2435,29 +2489,29 @@ fn make_set_comp<'a>(
 
 fn make_dict_comp<'a>(
     config: &Config<'a>,
-    mut lbrace: Token<'a>,
+    lbrace: Token<'a>,
     kvpair: (Expression<'a>, Token<'a>, Expression<'a>),
     for_in: CompFor<'a>,
-    mut rbrace: Token<'a>,
+    rbrace: Token<'a>,
 ) -> Result<'a, DictComp<'a>> {
     let lbrace =
-        parse_parenthesizable_whitespace(config, &mut lbrace.whitespace_after).map(|ws| {
-            LeftCurlyBrace {
+        parse_parenthesizable_whitespace(config, &mut lbrace.whitespace_after.borrow_mut()).map(
+            |ws| LeftCurlyBrace {
                 whitespace_after: ws,
-            }
-        })?;
+            },
+        )?;
     let rbrace =
-        parse_parenthesizable_whitespace(config, &mut rbrace.whitespace_before).map(|ws| {
-            RightCurlyBrace {
+        parse_parenthesizable_whitespace(config, &mut rbrace.whitespace_before.borrow_mut()).map(
+            |ws| RightCurlyBrace {
                 whitespace_before: ws,
-            }
-        })?;
+            },
+        )?;
 
-    let (key, mut colon, value) = kvpair;
+    let (key, colon, value) = kvpair;
     let whitespace_before_colon =
-        parse_parenthesizable_whitespace(config, &mut colon.whitespace_before)?;
+        parse_parenthesizable_whitespace(config, &mut colon.whitespace_before.borrow_mut())?;
     let whitespace_after_colon =
-        parse_parenthesizable_whitespace(config, &mut colon.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut colon.whitespace_after.borrow_mut())?;
 
     Ok(DictComp {
         key: Box::new(key),
@@ -2474,22 +2528,22 @@ fn make_dict_comp<'a>(
 
 fn make_list<'a>(
     config: &Config<'a>,
-    mut lbrak: Token<'a>,
+    lbrak: Token<'a>,
     elements: Vec<Element<'a>>,
-    mut rbrak: Token<'a>,
+    rbrak: Token<'a>,
 ) -> Result<'a, List<'a>> {
     let lbracket =
-        parse_parenthesizable_whitespace(config, &mut lbrak.whitespace_after).map(|ws| {
-            LeftSquareBracket {
+        parse_parenthesizable_whitespace(config, &mut lbrak.whitespace_after.borrow_mut()).map(
+            |ws| LeftSquareBracket {
                 whitespace_after: ws,
-            }
-        })?;
+            },
+        )?;
     let rbracket =
-        parse_parenthesizable_whitespace(config, &mut rbrak.whitespace_before).map(|ws| {
-            RightSquareBracket {
+        parse_parenthesizable_whitespace(config, &mut rbrak.whitespace_before.borrow_mut()).map(
+            |ws| RightSquareBracket {
                 whitespace_before: ws,
-            }
-        })?;
+            },
+        )?;
     Ok(List {
         elements,
         lbracket,
@@ -2501,22 +2555,22 @@ fn make_list<'a>(
 
 fn make_set<'a>(
     config: &Config<'a>,
-    mut lbrace: Token<'a>,
+    lbrace: Token<'a>,
     elements: Vec<Element<'a>>,
-    mut rbrace: Token<'a>,
+    rbrace: Token<'a>,
 ) -> Result<'a, Set<'a>> {
     let lbrace =
-        parse_parenthesizable_whitespace(config, &mut lbrace.whitespace_after).map(|ws| {
-            LeftCurlyBrace {
+        parse_parenthesizable_whitespace(config, &mut lbrace.whitespace_after.borrow_mut()).map(
+            |ws| LeftCurlyBrace {
                 whitespace_after: ws,
-            }
-        })?;
+            },
+        )?;
     let rbrace =
-        parse_parenthesizable_whitespace(config, &mut rbrace.whitespace_before).map(|ws| {
-            RightCurlyBrace {
+        parse_parenthesizable_whitespace(config, &mut rbrace.whitespace_before.borrow_mut()).map(
+            |ws| RightCurlyBrace {
                 whitespace_before: ws,
-            }
-        })?;
+            },
+        )?;
     Ok(Set {
         elements,
         lbrace,
@@ -2555,22 +2609,22 @@ where
 
 fn make_dict<'a>(
     config: &Config<'a>,
-    mut lbrace: Token<'a>,
+    lbrace: Token<'a>,
     elements: Vec<DictElement<'a>>,
-    mut rbrace: Token<'a>,
+    rbrace: Token<'a>,
 ) -> Result<'a, Dict<'a>> {
     let lbrace =
-        parse_parenthesizable_whitespace(config, &mut lbrace.whitespace_after).map(|ws| {
-            LeftCurlyBrace {
+        parse_parenthesizable_whitespace(config, &mut lbrace.whitespace_after.borrow_mut()).map(
+            |ws| LeftCurlyBrace {
                 whitespace_after: ws,
-            }
-        })?;
+            },
+        )?;
     let rbrace =
-        parse_parenthesizable_whitespace(config, &mut rbrace.whitespace_before).map(|ws| {
-            RightCurlyBrace {
+        parse_parenthesizable_whitespace(config, &mut rbrace.whitespace_before.borrow_mut()).map(
+            |ws| RightCurlyBrace {
                 whitespace_before: ws,
-            }
-        })?;
+            },
+        )?;
     Ok(Dict {
         elements,
         lbrace,
@@ -2604,11 +2658,11 @@ fn make_dict_element<'a>(
     config: &Config<'a>,
     el: (Expression<'a>, Token<'a>, Expression<'a>),
 ) -> Result<'a, DictElement<'a>> {
-    let (key, mut colon, value) = el;
+    let (key, colon, value) = el;
     let whitespace_before_colon =
-        parse_parenthesizable_whitespace(config, &mut colon.whitespace_before)?;
+        parse_parenthesizable_whitespace(config, &mut colon.whitespace_before.borrow_mut())?;
     let whitespace_after_colon =
-        parse_parenthesizable_whitespace(config, &mut colon.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut colon.whitespace_after.borrow_mut())?;
 
     Ok(DictElement::Simple {
         key,
@@ -2621,11 +2675,11 @@ fn make_dict_element<'a>(
 
 fn make_double_starred_element<'a>(
     config: &Config<'a>,
-    mut star: Token<'a>,
+    star: Token<'a>,
     value: Expression<'a>,
 ) -> Result<'a, DoubleStarredElement<'a>> {
     let whitespace_before_value =
-        parse_parenthesizable_whitespace(config, &mut star.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut star.whitespace_after.borrow_mut())?;
     Ok(DoubleStarredElement {
         value,
         comma: Default::default(),
@@ -2637,9 +2691,11 @@ fn make_index(value: Expression) -> BaseSlice {
     BaseSlice::Index(Index { value })
 }
 
-fn make_colon<'a>(config: &Config<'a>, mut tok: Token<'a>) -> Result<'a, Colon<'a>> {
-    let whitespace_before = parse_parenthesizable_whitespace(config, &mut tok.whitespace_before)?;
-    let whitespace_after = parse_parenthesizable_whitespace(config, &mut tok.whitespace_after)?;
+fn make_colon<'a>(config: &Config<'a>, tok: Token<'a>) -> Result<'a, Colon<'a>> {
+    let whitespace_before =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before.borrow_mut())?;
+    let whitespace_after =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_after.borrow_mut())?;
     Ok(Colon {
         whitespace_before,
         whitespace_after,
@@ -2720,16 +2776,16 @@ fn make_slices<'a>(
 fn make_subscript<'a>(
     config: &Config<'a>,
     value: Expression<'a>,
-    mut lbrak: Token<'a>,
+    lbrak: Token<'a>,
     slice: Vec<SubscriptElement<'a>>,
-    mut rbrak: Token<'a>,
+    rbrak: Token<'a>,
 ) -> Result<'a, Subscript<'a>> {
     let lbracket =
-        parse_parenthesizable_whitespace(config, &mut lbrak.whitespace_after).map(|ws| {
-            LeftSquareBracket {
+        parse_parenthesizable_whitespace(config, &mut lbrak.whitespace_after.borrow_mut()).map(
+            |ws| LeftSquareBracket {
                 whitespace_after: ws,
-            }
-        })?;
+            },
+        )?;
 
     // if there is a trailing comma, it owns the whitespace before right bracket
     let rbracket = if let Some(SubscriptElement { comma: Some(_), .. }) = slice.last() {
@@ -2737,14 +2793,14 @@ fn make_subscript<'a>(
             SimpleWhitespace(""),
         ))
     } else {
-        parse_parenthesizable_whitespace(config, &mut rbrak.whitespace_before)
+        parse_parenthesizable_whitespace(config, &mut rbrak.whitespace_before.borrow_mut())
     }
     .map(|ws| RightSquareBracket {
         whitespace_before: ws,
     })?;
 
     let whitespace_after_value =
-        parse_parenthesizable_whitespace(config, &mut lbrak.whitespace_before)?;
+        parse_parenthesizable_whitespace(config, &mut lbrak.whitespace_before.borrow_mut())?;
     Ok(Subscript {
         value: Box::new(value),
         slice,
@@ -2759,19 +2815,19 @@ fn make_subscript<'a>(
 fn make_ifexp<'a>(
     config: &Config<'a>,
     body: Expression<'a>,
-    mut if_tok: Token<'a>,
+    if_tok: Token<'a>,
     test: Expression<'a>,
-    mut else_tok: Token<'a>,
+    else_tok: Token<'a>,
     orelse: Expression<'a>,
 ) -> Result<'a, IfExp<'a>> {
     let whitespace_before_if =
-        parse_parenthesizable_whitespace(config, &mut if_tok.whitespace_before)?;
+        parse_parenthesizable_whitespace(config, &mut if_tok.whitespace_before.borrow_mut())?;
     let whitespace_after_if =
-        parse_parenthesizable_whitespace(config, &mut if_tok.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut if_tok.whitespace_after.borrow_mut())?;
     let whitespace_before_else =
-        parse_parenthesizable_whitespace(config, &mut else_tok.whitespace_before)?;
+        parse_parenthesizable_whitespace(config, &mut else_tok.whitespace_before.borrow_mut())?;
     let whitespace_after_else =
-        parse_parenthesizable_whitespace(config, &mut else_tok.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut else_tok.whitespace_after.borrow_mut())?;
 
     Ok(IfExp {
         test: Box::new(test),
@@ -2799,7 +2855,7 @@ fn add_arguments_trailing_comma<'a>(
 
 fn make_lambda<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     mut params: Parameters<'a>,
     colon_tok: Token<'a>,
     expr: Expression<'a>,
@@ -2809,7 +2865,7 @@ fn make_lambda<'a>(
     } else {
         Some(parse_parenthesizable_whitespace(
             config,
-            &mut kw.whitespace_after,
+            &mut kw.whitespace_after.borrow_mut(),
         )?)
     };
     let colon_tok = adjust_parameters_trailing_whitespace(config, &mut params, colon_tok)?;
@@ -2826,15 +2882,15 @@ fn make_lambda<'a>(
 
 fn make_annotation<'a>(
     config: &Config<'a>,
-    mut indicator: Token<'a>,
+    indicator: Token<'a>,
     ann: Expression<'a>,
 ) -> Result<'a, Annotation<'a>> {
     let whitespace_before_indicator = Some(parse_parenthesizable_whitespace(
         config,
-        &mut indicator.whitespace_before,
+        &mut indicator.whitespace_before.borrow_mut(),
     )?);
     let whitespace_after_indicator =
-        parse_parenthesizable_whitespace(config, &mut indicator.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut indicator.whitespace_after.borrow_mut())?;
 
     Ok(Annotation {
         annotation: ann,
@@ -2868,7 +2924,7 @@ fn make_ann_assignment<'a>(
 
 fn make_yield<'a>(
     config: &Config<'a>,
-    mut y: Token<'a>,
+    y: Token<'a>,
     f: Option<Token<'a>>,
     e: Option<Expression<'a>>,
 ) -> Result<'a, Yield<'a>> {
@@ -2880,7 +2936,7 @@ fn make_yield<'a>(
     };
     let whitespace_after_yield = Some(parse_parenthesizable_whitespace(
         config,
-        &mut y.whitespace_after,
+        &mut y.whitespace_after.borrow_mut(),
     )?);
     Ok(Yield {
         value: value.map(Box::new),
@@ -2892,19 +2948,20 @@ fn make_yield<'a>(
 
 fn make_from<'a>(
     config: &Config<'a>,
-    mut f: Token<'a>,
+    f: Token<'a>,
     e: Expression<'a>,
     eat_whitespace_before_from: bool,
 ) -> Result<'a, From<'a>> {
     let whitespace_before_from = if eat_whitespace_before_from {
         Some(parse_parenthesizable_whitespace(
             config,
-            &mut f.whitespace_before,
+            &mut f.whitespace_before.borrow_mut(),
         )?)
     } else {
         None
     };
-    let whitespace_after_from = parse_parenthesizable_whitespace(config, &mut f.whitespace_after)?;
+    let whitespace_after_from =
+        parse_parenthesizable_whitespace(config, &mut f.whitespace_after.borrow_mut())?;
     Ok(From {
         item: e,
         whitespace_before_from,
@@ -2914,10 +2971,13 @@ fn make_from<'a>(
 
 fn make_return<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     value: Option<Expression<'a>>,
 ) -> Result<'a, Return<'a>> {
-    let whitespace_after_return = Some(parse_simple_whitespace(config, &mut kw.whitespace_after)?);
+    let whitespace_after_return = Some(parse_simple_whitespace(
+        config,
+        &mut kw.whitespace_after.borrow_mut(),
+    )?);
     Ok(Return {
         value,
         whitespace_after_return,
@@ -2927,11 +2987,12 @@ fn make_return<'a>(
 
 fn make_assert<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     test: Expression<'a>,
     rest: Option<(Comma<'a>, Expression<'a>)>,
 ) -> Result<'a, Assert<'a>> {
-    let whitespace_after_assert = parse_simple_whitespace(config, &mut kw.whitespace_after)?;
+    let whitespace_after_assert =
+        parse_simple_whitespace(config, &mut kw.whitespace_after.borrow_mut())?;
     let (comma, msg) = if let Some((c, msg)) = rest {
         (Some(c), Some(msg))
     } else {
@@ -2949,11 +3010,14 @@ fn make_assert<'a>(
 
 fn make_raise<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     exc: Option<Expression<'a>>,
     rest: Option<(Token<'a>, Expression<'a>)>,
 ) -> Result<'a, Raise<'a>> {
-    let whitespace_after_raise = Some(parse_simple_whitespace(config, &mut kw.whitespace_after)?);
+    let whitespace_after_raise = Some(parse_simple_whitespace(
+        config,
+        &mut kw.whitespace_after.borrow_mut(),
+    )?);
     let cause = if let Some((t, e)) = rest {
         Some(make_from(config, t, e, true)?)
     } else {
@@ -2970,11 +3034,12 @@ fn make_raise<'a>(
 
 fn make_global<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     init: Vec<(Name<'a>, Comma<'a>)>,
     last: Name<'a>,
 ) -> Result<'a, Global<'a>> {
-    let whitespace_after_global = parse_simple_whitespace(config, &mut kw.whitespace_after)?;
+    let whitespace_after_global =
+        parse_simple_whitespace(config, &mut kw.whitespace_after.borrow_mut())?;
     let mut names: Vec<NameItem<'a>> = init
         .into_iter()
         .map(|(name, c)| NameItem {
@@ -2995,11 +3060,12 @@ fn make_global<'a>(
 
 fn make_nonlocal<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     init: Vec<(Name<'a>, Comma<'a>)>,
     last: Name<'a>,
 ) -> Result<'a, Nonlocal<'a>> {
-    let whitespace_after_nonlocal = parse_simple_whitespace(config, &mut kw.whitespace_after)?;
+    let whitespace_after_nonlocal =
+        parse_simple_whitespace(config, &mut kw.whitespace_after.borrow_mut())?;
     let mut names: Vec<NameItem<'a>> = init
         .into_iter()
         .map(|(name, c)| NameItem {
@@ -3022,35 +3088,40 @@ fn make_nonlocal<'a>(
 fn make_for<'a>(
     config: &Config<'a>,
     asy: Option<Token<'a>>,
-    mut for_: Token<'a>,
+    for_: Token<'a>,
     target: AssignTargetExpression<'a>,
-    mut in_: Token<'a>,
+    in_: Token<'a>,
     iter: Expression<'a>,
-    mut col: Token<'a>,
+    col: Token<'a>,
     body: Suite<'a>,
     orelse: Option<Else<'a>>,
 ) -> Result<'a, For<'a>> {
-    let (asynchronous, leading_lines) = if let Some(mut asy) = asy {
-        let whitespace_after = parse_parenthesizable_whitespace(config, &mut asy.whitespace_after)?;
+    let (asynchronous, leading_lines) = if let Some(asy) = asy {
+        let whitespace_after =
+            parse_parenthesizable_whitespace(config, &mut asy.whitespace_after.borrow_mut())?;
         (
             Some(Asynchronous { whitespace_after }),
             Some(parse_empty_lines_from_end(
                 config,
-                &mut asy.whitespace_before,
+                &mut asy.whitespace_before.borrow_mut(),
             )?),
         )
     } else {
         (None, None)
     };
-    let whitespace_after_for = parse_simple_whitespace(config, &mut for_.whitespace_after)?;
-    let whitespace_before_in = parse_simple_whitespace(config, &mut in_.whitespace_before)?;
-    let whitespace_after_in = parse_simple_whitespace(config, &mut in_.whitespace_after)?;
-    let whitespace_before_colon = parse_simple_whitespace(config, &mut col.whitespace_before)?;
+    let whitespace_after_for =
+        parse_simple_whitespace(config, &mut for_.whitespace_after.borrow_mut())?;
+    let whitespace_before_in =
+        parse_simple_whitespace(config, &mut in_.whitespace_before.borrow_mut())?;
+    let whitespace_after_in =
+        parse_simple_whitespace(config, &mut in_.whitespace_after.borrow_mut())?;
+    let whitespace_before_colon =
+        parse_simple_whitespace(config, &mut col.whitespace_before.borrow_mut())?;
 
     let leading_lines = if let Some(ll) = leading_lines {
         ll
     } else {
-        parse_empty_lines_from_end(config, &mut for_.whitespace_before)?
+        parse_empty_lines_from_end(config, &mut for_.whitespace_before.borrow_mut())?
     };
 
     Ok(For {
@@ -3069,15 +3140,17 @@ fn make_for<'a>(
 
 fn make_while<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     test: Expression<'a>,
-    mut col: Token<'a>,
+    col: Token<'a>,
     body: Suite<'a>,
     orelse: Option<Else<'a>>,
 ) -> Result<'a, While<'a>> {
-    let whitespace_after_while = parse_simple_whitespace(config, &mut kw.whitespace_after)?;
-    let whitespace_before_colon = parse_simple_whitespace(config, &mut col.whitespace_before)?;
-    let leading_lines = parse_empty_lines_from_end(config, &mut kw.whitespace_before)?;
+    let whitespace_after_while =
+        parse_simple_whitespace(config, &mut kw.whitespace_after.borrow_mut())?;
+    let whitespace_before_colon =
+        parse_simple_whitespace(config, &mut col.whitespace_before.borrow_mut())?;
+    let leading_lines = parse_empty_lines_from_end(config, &mut kw.whitespace_before.borrow_mut())?;
     Ok(While {
         test,
         body,
@@ -3090,11 +3163,11 @@ fn make_while<'a>(
 
 fn make_await<'a>(
     config: &Config<'a>,
-    mut aw: Token<'a>,
+    aw: Token<'a>,
     expression: Expression<'a>,
 ) -> Result<'a, Await<'a>> {
     let whitespace_after_await =
-        parse_parenthesizable_whitespace(config, &mut aw.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut aw.whitespace_after.borrow_mut())?;
 
     Ok(Await {
         expression: Box::new(expression),
@@ -3106,19 +3179,22 @@ fn make_await<'a>(
 
 fn make_class_def<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     name: Name<'a>,
     args: Option<(Token<'a>, Option<Vec<Arg<'a>>>, Token<'a>)>,
-    mut col: Token<'a>,
+    col: Token<'a>,
     body: Suite<'a>,
 ) -> Result<'a, ClassDef<'a>> {
-    let leading_lines = parse_empty_lines_from_end(config, &mut kw.whitespace_before)?;
-    let whitespace_after_class = parse_simple_whitespace(config, &mut kw.whitespace_after)?;
+    let leading_lines = parse_empty_lines_from_end(config, &mut kw.whitespace_before.borrow_mut())?;
+    let whitespace_after_class =
+        parse_simple_whitespace(config, &mut kw.whitespace_after.borrow_mut())?;
     let lines_after_decorators = vec![];
 
-    if let Some((mut lpar, args, rpar)) = args {
-        let whitespace_after_name = parse_simple_whitespace(config, &mut lpar.whitespace_before)?;
-        let whitespace_before_colon = parse_simple_whitespace(config, &mut col.whitespace_before)?;
+    if let Some((lpar, args, rpar)) = args {
+        let whitespace_after_name =
+            parse_simple_whitespace(config, &mut lpar.whitespace_before.borrow_mut())?;
+        let whitespace_before_colon =
+            parse_simple_whitespace(config, &mut col.whitespace_before.borrow_mut())?;
         let lpar = Some(make_lpar(config, lpar)?);
         let mut rpar = Some(make_rpar(config, rpar)?);
         let mut bases = vec![];
@@ -3158,7 +3234,8 @@ fn make_class_def<'a>(
             whitespace_before_colon,
         })
     } else {
-        let whitespace_after_name = parse_simple_whitespace(config, &mut col.whitespace_before)?;
+        let whitespace_after_name =
+            parse_simple_whitespace(config, &mut col.whitespace_before.borrow_mut())?;
         let whitespace_before_colon = SimpleWhitespace("");
         Ok(ClassDef {
             name,
@@ -3190,9 +3267,9 @@ fn make_strings<'a>(
 ) -> Result<'a, String<'a>> {
     let mut strings = s.into_iter().rev();
     let (first, _) = strings.next().expect("no strings to make a string of");
-    let ret = strings.try_fold(first, |acc, (str, mut tok)| {
+    let ret = strings.try_fold(first, |acc, (str, tok)| {
         let whitespace_between =
-            parse_parenthesizable_whitespace(config, &mut tok.whitespace_before)?;
+            parse_parenthesizable_whitespace(config, &mut tok.whitespace_before.borrow_mut())?;
         let ret: Result<'a, String<'a>> = Ok(String::Concatenated(ConcatenatedString {
             left: Box::new(str),
             right: Box::new(acc),
@@ -3207,15 +3284,15 @@ fn make_strings<'a>(
 
 fn make_fstring_expression<'a>(
     config: &Config<'a>,
-    mut lbrace: Token<'a>,
+    lbrace: Token<'a>,
     expression: Expression<'a>,
     eq: Option<Token<'a>>,
     conversion_pair: Option<(Token<'a>, &'a str)>,
     format_pair: Option<(Token<'a>, Vec<FormattedStringContent<'a>>)>,
-    mut rbrace: Token<'a>,
+    rbrace: Token<'a>,
 ) -> Result<'a, FormattedStringExpression<'a>> {
     let whitespace_before_expression =
-        parse_parenthesizable_whitespace(config, &mut lbrace.whitespace_after)?;
+        parse_parenthesizable_whitespace(config, &mut lbrace.whitespace_after.borrow_mut())?;
     let equal = if let Some(eq) = eq {
         Some(make_assign_equal(config, eq)?)
     } else {
@@ -3233,12 +3310,12 @@ fn make_fstring_expression<'a>(
     };
     let whitespace_after_expression = if equal.is_some() {
         Default::default()
-    } else if let Some(mut tok) = conversion_tok {
-        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before)?
-    } else if let Some(mut tok) = format_tok {
-        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before)?
+    } else if let Some(tok) = conversion_tok {
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before.borrow_mut())?
+    } else if let Some(tok) = format_tok {
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before.borrow_mut())?
     } else {
-        parse_parenthesizable_whitespace(config, &mut rbrace.whitespace_before)?
+        parse_parenthesizable_whitespace(config, &mut rbrace.whitespace_before.borrow_mut())?
     };
 
     Ok(FormattedStringExpression {
@@ -3267,12 +3344,13 @@ fn make_fstring<'a>(
 
 fn make_finally<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
-    mut col: Token<'a>,
+    kw: Token<'a>,
+    col: Token<'a>,
     body: Suite<'a>,
 ) -> Result<'a, Finally<'a>> {
-    let leading_lines = parse_empty_lines_from_end(config, &mut kw.whitespace_before)?;
-    let whitespace_before_colon = parse_simple_whitespace(config, &mut col.whitespace_before)?;
+    let leading_lines = parse_empty_lines_from_end(config, &mut kw.whitespace_before.borrow_mut())?;
+    let whitespace_before_colon =
+        parse_simple_whitespace(config, &mut col.whitespace_before.borrow_mut())?;
     Ok(Finally {
         body,
         leading_lines,
@@ -3282,20 +3360,21 @@ fn make_finally<'a>(
 
 fn make_except<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     exp: Option<Expression<'a>>,
     as_: Option<(Token<'a>, Name<'a>)>,
-    mut col: Token<'a>,
+    col: Token<'a>,
     body: Suite<'a>,
 ) -> Result<'a, ExceptHandler<'a>> {
-    let leading_lines = parse_empty_lines_from_end(config, &mut kw.whitespace_before)?;
-    let whitespace_after_except = parse_simple_whitespace(config, &mut kw.whitespace_after)?;
-    let (name, whitespace_before_colon) = if let Some((mut as_tok, name)) = as_ {
+    let leading_lines = parse_empty_lines_from_end(config, &mut kw.whitespace_before.borrow_mut())?;
+    let whitespace_after_except =
+        parse_simple_whitespace(config, &mut kw.whitespace_after.borrow_mut())?;
+    let (name, whitespace_before_colon) = if let Some((as_tok, name)) = as_ {
         let whitespace_before_as = ParenthesizableWhitespace::SimpleWhitespace(
-            parse_simple_whitespace(config, &mut as_tok.whitespace_before)?,
+            parse_simple_whitespace(config, &mut as_tok.whitespace_before.borrow_mut())?,
         );
         let whitespace_after_as = ParenthesizableWhitespace::SimpleWhitespace(
-            parse_simple_whitespace(config, &mut as_tok.whitespace_after)?,
+            parse_simple_whitespace(config, &mut as_tok.whitespace_after.borrow_mut())?,
         );
         (
             Some(AsName {
@@ -3303,7 +3382,7 @@ fn make_except<'a>(
                 whitespace_after_as,
                 whitespace_before_as,
             }),
-            parse_simple_whitespace(config, &mut col.whitespace_before)?,
+            parse_simple_whitespace(config, &mut col.whitespace_before.borrow_mut())?,
         )
     } else {
         (None, Default::default())
@@ -3320,15 +3399,16 @@ fn make_except<'a>(
 
 fn make_try<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     _col: Token<'a>,
     body: Suite<'a>,
     handlers: Vec<ExceptHandler<'a>>,
     orelse: Option<Else<'a>>,
     finalbody: Option<Finally<'a>>,
 ) -> Result<'a, Try<'a>> {
-    let leading_lines = parse_empty_lines_from_end(config, &mut kw.whitespace_before)?;
-    let whitespace_before_colon = parse_simple_whitespace(config, &mut kw.whitespace_after)?;
+    let leading_lines = parse_empty_lines_from_end(config, &mut kw.whitespace_before.borrow_mut())?;
+    let whitespace_before_colon =
+        parse_simple_whitespace(config, &mut kw.whitespace_after.borrow_mut())?;
     Ok(Try {
         body,
         handlers,
@@ -3339,9 +3419,11 @@ fn make_try<'a>(
     })
 }
 
-fn make_aug_op<'a>(config: &Config<'a>, mut tok: Token<'a>) -> Result<'a, AugOp<'a>> {
-    let whitespace_before = parse_parenthesizable_whitespace(config, &mut tok.whitespace_before)?;
-    let whitespace_after = parse_parenthesizable_whitespace(config, &mut tok.whitespace_after)?;
+fn make_aug_op<'a>(config: &Config<'a>, tok: Token<'a>) -> Result<'a, AugOp<'a>> {
+    let whitespace_before =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_before.borrow_mut())?;
+    let whitespace_after =
+        parse_parenthesizable_whitespace(config, &mut tok.whitespace_after.borrow_mut())?;
     Ok(match tok.string {
         "+=" => AugOp::AddAssign {
             whitespace_before,
@@ -3419,11 +3501,11 @@ fn make_with_item<'a>(
     n: Option<AssignTargetExpression<'a>>,
 ) -> Result<'a, WithItem<'a>> {
     let asname = match (as_, n) {
-        (Some(mut as_), Some(n)) => {
+        (Some(as_), Some(n)) => {
             let whitespace_before_as =
-                parse_parenthesizable_whitespace(config, &mut as_.whitespace_before)?;
+                parse_parenthesizable_whitespace(config, &mut as_.whitespace_before.borrow_mut())?;
             let whitespace_after_as =
-                parse_parenthesizable_whitespace(config, &mut as_.whitespace_after)?;
+                parse_parenthesizable_whitespace(config, &mut as_.whitespace_after.borrow_mut())?;
             Some(AsName {
                 name: n,
                 whitespace_before_as,
@@ -3443,18 +3525,19 @@ fn make_with_item<'a>(
 fn make_with<'a>(
     config: &Config<'a>,
     asy: Option<Token<'a>>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     items: Vec<WithItem<'a>>,
-    mut col: Token<'a>,
+    col: Token<'a>,
     body: Suite<'a>,
 ) -> Result<'a, With<'a>> {
-    let (asynchronous, leading_lines) = if let Some(mut asy) = asy {
-        let whitespace_after = parse_parenthesizable_whitespace(config, &mut asy.whitespace_after)?;
+    let (asynchronous, leading_lines) = if let Some(asy) = asy {
+        let whitespace_after =
+            parse_parenthesizable_whitespace(config, &mut asy.whitespace_after.borrow_mut())?;
         (
             Some(Asynchronous { whitespace_after }),
             Some(parse_empty_lines_from_end(
                 config,
-                &mut asy.whitespace_before,
+                &mut asy.whitespace_before.borrow_mut(),
             )?),
         )
     } else {
@@ -3464,11 +3547,13 @@ fn make_with<'a>(
     let leading_lines = if let Some(ll) = leading_lines {
         ll
     } else {
-        parse_empty_lines_from_end(config, &mut kw.whitespace_before)?
+        parse_empty_lines_from_end(config, &mut kw.whitespace_before.borrow_mut())?
     };
 
-    let whitespace_after_with = parse_simple_whitespace(config, &mut kw.whitespace_after)?;
-    let whitespace_before_colon = parse_simple_whitespace(config, &mut col.whitespace_before)?;
+    let whitespace_after_with =
+        parse_simple_whitespace(config, &mut kw.whitespace_after.borrow_mut())?;
+    let whitespace_before_colon =
+        parse_simple_whitespace(config, &mut col.whitespace_before.borrow_mut())?;
 
     Ok(With {
         items,
@@ -3482,10 +3567,11 @@ fn make_with<'a>(
 
 fn make_del<'a>(
     config: &Config<'a>,
-    mut kw: Token<'a>,
+    kw: Token<'a>,
     target: DelTargetExpression<'a>,
 ) -> Result<'a, Del<'a>> {
-    let whitespace_after_del = parse_simple_whitespace(config, &mut kw.whitespace_after)?;
+    let whitespace_after_del =
+        parse_simple_whitespace(config, &mut kw.whitespace_after.borrow_mut())?;
     Ok(Del {
         target,
         whitespace_after_del,

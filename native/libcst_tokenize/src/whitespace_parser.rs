@@ -1,3 +1,9 @@
+use std::{
+    cell::{RefCell, RefMut},
+    ops::Deref,
+    rc::Rc,
+};
+
 use libcst_nodes::{
     Comment, EmptyLine, Fakeness, Newline, ParenthesizableWhitespace, ParenthesizedWhitespace,
     SimpleWhitespace, TrailingWhitespace,
@@ -45,6 +51,47 @@ impl<'a> Default for State<'a> {
         }
     }
 }
+
+#[derive(Clone)]
+pub struct SharedState<'a>(Rc<(RefCell<State<'a>>, State<'a>, RefCell<bool>)>);
+
+impl<'a> SharedState<'a> {
+    pub fn borrow_mut(&self) -> RefMut<State<'a>> {
+        *self.0 .2.borrow_mut() = true;
+        RefCell::borrow_mut(&(*self.0).0)
+    }
+}
+
+impl<'a> Default for SharedState<'a> {
+    fn default() -> Self {
+        let def: State = Default::default();
+        Self::from(def)
+    }
+}
+
+impl<'a> From<State<'a>> for SharedState<'a> {
+    fn from(s: State<'a>) -> Self {
+        Self(Rc::new((RefCell::new(s.clone()), s, RefCell::new(false))))
+    }
+}
+
+impl<'a> Deref for SharedState<'a> {
+    type Target = RefCell<State<'a>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0.deref().0
+    }
+}
+
+impl<'a> Drop for SharedState<'a> {
+    fn drop(&mut self) {
+        if Rc::strong_count(&self.0) > 1 && *self.0 .2.borrow() {
+            if let Some(mut inner) = Rc::get_mut(&mut self.0) {
+                inner.0 = RefCell::new(inner.1.clone());
+            }
+        }
+    }
+}
+
 // TODO
 pub struct Config<'a> {
     pub input: &'a str,
