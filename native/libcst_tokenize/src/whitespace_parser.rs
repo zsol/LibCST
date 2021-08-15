@@ -80,7 +80,7 @@ impl<'a> Config<'a> {
 
 fn parse_empty_line<'a>(
     config: &Config<'a>,
-    state: &mut State,
+    state: &mut State<'a>,
     override_absolute_indent: Option<&'a str>,
 ) -> Result<Option<EmptyLine<'a>>> {
     let mut speculative_state = state.clone();
@@ -98,30 +98,25 @@ fn parse_empty_line<'a>(
                 whitespace,
                 comment,
                 newline,
+                indentation: if indent {
+                    Some(override_absolute_indent.unwrap_or(state.absolute_indent))
+                } else {
+                    None
+                },
             }));
         }
     }
     Ok(None)
 }
 
-pub fn parse_empty_lines<'a>(
+fn _parse_all_empty_lines<'a>(
     config: &Config<'a>,
-    state: &mut State,
+    state: &mut State<'a>,
     override_absolute_indent: Option<&'a str>,
-) -> Result<Vec<EmptyLine<'a>>> {
-    // If override_absolute_indent is Some, then we need to parse all lines up to and including the
-    // last line that is indented at our level. These all belong to the footer and not to the next
-    // line's leading_lines.
-    //
-    // We don't know what the last line with indent=True is, and there could be indent=False lines
-    // interspersed with indent=True lines, so we need to speculatively parse all possible empty
-    // lines, and then unwind to find the last empty line with indent=True.
-    let mut speculative_state = state.clone();
+) -> Result<Vec<(State<'a>, EmptyLine<'a>)>> {
     let mut lines = Vec::new();
-    while let Some(empty_line) =
-        parse_empty_line(config, &mut speculative_state, override_absolute_indent)?
-    {
-        lines.push((speculative_state.clone(), empty_line));
+    while let Some(empty_line) = parse_empty_line(config, state, override_absolute_indent)? {
+        lines.push((state.clone(), empty_line));
         if let Some((
             _,
             EmptyLine {
@@ -133,28 +128,60 @@ pub fn parse_empty_lines<'a>(
             break;
         }
     }
+    Ok(lines)
+}
+
+pub fn parse_all_empty_lines<'a>(
+    config: &Config<'a>,
+    state: &mut State<'a>,
+) -> Result<Vec<EmptyLine<'a>>> {
+    _parse_all_empty_lines(config, state, Some("")).map(|v| v.into_iter().map(|(_, l)| l).collect())
+}
+
+pub fn parse_empty_lines<'a>(
+    config: &Config<'a>,
+    state: &mut State<'a>,
+    override_absolute_indent: Option<&'a str>,
+) -> Result<Vec<EmptyLine<'a>>> {
+    // If override_absolute_indent is Some, then we need to parse all lines up to and including the
+    // last line that is indented at our level. These all belong to the footer and not to the next
+    // line's leading_lines.
+    //
+    // We don't know what the last line with indent=True is, and there could be indent=False lines
+    // interspersed with indent=True lines, so we need to speculatively parse all possible empty
+    // lines, and then unwind to find the last empty line with indent=True.
+    let mut speculative_state = state.clone();
+    let mut lines =
+        _parse_all_empty_lines(config, &mut speculative_state, override_absolute_indent)?;
 
     if override_absolute_indent.is_some() {
         // Remove elements from the end until we find an indented line.
         while let Some((_, empty_line)) = lines.last() {
-            if empty_line.indent {
+            if empty_line.indent && empty_line.indentation == override_absolute_indent {
                 break;
             }
             lines.pop();
         }
     }
 
+    // find last non-empty line not on our indentation level
+    let last_droppable_line = find_last_line_at(&lines, config, override_absolute_indent);
+
     if let Some((final_state, _)) = lines.last() {
         // update the state to match the last line that we captured
         *state = final_state.clone();
     }
 
-    Ok(lines.into_iter().map(|(_, e)| e).collect())
+    Ok(lines
+        .into_iter()
+        .skip(last_droppable_line.map(|x| x + 1).unwrap_or(0))
+        .map(|(_, e)| e)
+        .collect())
 }
 
 pub fn parse_empty_lines_from_end<'a>(
     config: &Config<'a>,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<Vec<EmptyLine<'a>>> {
     let mut speculative_state = state.clone();
     let mut lines = vec![];
@@ -162,18 +189,44 @@ pub fn parse_empty_lines_from_end<'a>(
         lines.push((speculative_state.clone(), empty_line));
     }
 
-    // find last non-empty line not on our indentation level
+    let last_droppable_line = find_last_line_at(&lines, config, None);
+
+    *state = speculative_state;
+    Ok(lines
+        .into_iter()
+        .skip(last_droppable_line.map(|x| x + 1).unwrap_or(0))
+        .map(|(_, l)| l)
+        .collect())
+}
+
+fn find_last_line_at(
+    lines: &[(State, EmptyLine)],
+    config: &Config,
+    override_absolute_indent: Option<&str>,
+) -> Option<usize> {
     let mut last_droppable_line = None;
     for (ind, (s, empty_line)) in lines.iter().enumerate() {
-        let raw_line = config.get_line(s.line.saturating_sub(1))?;
+        let line_number = if s.column == 0 {
+            s.line.saturating_sub(1)
+        } else {
+            // assuming state is the end of the line
+            s.line
+        };
+        let raw_line = config.get_line(line_number);
+        if raw_line.is_err() {
+            continue;
+        }
+        let raw_line = raw_line.unwrap();
         if empty_line.comment.is_none() && empty_line.whitespace.0.is_empty() {
             // this line is empty
             continue;
         }
 
-        if raw_line.starts_with(s.absolute_indent) {
+        let indent = override_absolute_indent.unwrap_or(s.absolute_indent);
+
+        if raw_line.starts_with(indent) {
             // this line is at least on our indentation level
-            match raw_line.as_bytes()[s.absolute_indent.len()] {
+            match raw_line.as_bytes()[indent.len()] {
                 b' ' | b'\t' => {
                     // there is still more indentation
                     last_droppable_line = Some(ind);
@@ -182,13 +235,7 @@ pub fn parse_empty_lines_from_end<'a>(
             }
         }
     }
-
-    *state = speculative_state;
-    Ok(lines
-        .into_iter()
-        .skip(last_droppable_line.map(|x| x + 1).unwrap_or(0))
-        .map(|(_, l)| l)
-        .collect())
+    last_droppable_line
 }
 
 pub fn parse_comment<'a>(config: &Config<'a>, state: &mut State) -> Result<Option<Comment<'a>>> {
@@ -365,7 +412,7 @@ pub fn parse_simple_whitespace<'a>(
 
 pub fn parse_parenthesizable_whitespace<'a>(
     config: &Config<'a>,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<ParenthesizableWhitespace<'a>> {
     if state.is_parenthesized {
         if let Some(ws) = parse_parenthesized_whitespace(config, state)? {
@@ -377,7 +424,7 @@ pub fn parse_parenthesizable_whitespace<'a>(
 
 pub fn parse_parenthesized_whitespace<'a>(
     config: &Config<'a>,
-    state: &mut State,
+    state: &mut State<'a>,
 ) -> Result<Option<ParenthesizedWhitespace<'a>>> {
     if let Some(first_line) = parse_optional_trailing_whitespace(config, state)? {
         let mut empty_lines = Vec::new();

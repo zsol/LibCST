@@ -5,8 +5,9 @@
 
 use libcst_nodes::*;
 use libcst_tokenize::whitespace_parser::{
-    parse_empty_lines, parse_empty_lines_from_end, parse_parenthesizable_whitespace,
-    parse_simple_whitespace, parse_trailing_whitespace, Config, WhitespaceError,
+    parse_all_empty_lines, parse_empty_lines, parse_empty_lines_from_end,
+    parse_parenthesizable_whitespace, parse_simple_whitespace, parse_trailing_whitespace, Config,
+    WhitespaceError,
 };
 use libcst_tokenize::{TokError, TokType, Token};
 use peg::str::LineCol;
@@ -2001,9 +2002,9 @@ fn make_module<'a>(
     mut body: Vec<Statement<'a>>,
     mut tok: Token<'a>,
 ) -> Result<'a, Module<'a>> {
-    let mut footer = parse_empty_lines(config, &mut tok.whitespace_before, Some(""))?;
-    let mut header = vec![];
     if let Some(stmt) = body.first_mut() {
+        let mut footer = parse_empty_lines(config, &mut tok.whitespace_before, Some(""))?;
+        let header = vec![];
         swap(&mut stmt.leading_lines(), &mut &header);
         let mut last_indented = None;
         for (num, line) in footer.iter().enumerate() {
@@ -2023,14 +2024,20 @@ fn make_module<'a>(
                 footer = rest.to_vec();
             }
         }
+        Ok(Module {
+            body,
+            header,
+            footer,
+        })
     } else {
-        swap(&mut header, &mut footer);
+        // there are no statements, all whitespace goes to header
+        let header = parse_all_empty_lines(config, &mut tok.whitespace_before)?;
+        Ok(Module {
+            body,
+            header,
+            footer: vec![],
+        })
     }
-    Ok(Module {
-        body,
-        header,
-        footer,
-    })
 }
 
 fn make_attribute<'a>(

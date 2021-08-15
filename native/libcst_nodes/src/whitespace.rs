@@ -80,6 +80,7 @@ pub struct EmptyLine<'a> {
     pub whitespace: SimpleWhitespace<'a>,
     pub comment: Option<Comment<'a>>,
     pub newline: Newline<'a>,
+    pub indentation: Option<&'a str>,
 }
 
 impl<'a> Codegen<'a> for EmptyLine<'a> {
@@ -102,6 +103,7 @@ impl<'a> Default for EmptyLine<'a> {
             whitespace: Default::default(),
             comment: Default::default(),
             newline: Default::default(),
+            indentation: None,
         }
     }
 }
